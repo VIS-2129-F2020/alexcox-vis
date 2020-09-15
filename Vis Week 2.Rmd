@@ -1,0 +1,375 @@
+---
+title: "Vis Week 2"
+author: "Alex Cox"
+date: "9/13/2020"
+output: html_document
+---
+
+
+```{r load libraries, results = 'hide', message=FALSE, echo=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(tidycensus)
+```
+
+``` {r load data, message=FALSE, results=FALSE, echo=FALSE}
+person_data <- get_pums(variables = c("MIL",
+                                      "JWTR",
+                                      "PINCP",
+                                      "AGEP",
+                                      "JWMNP"),
+                        state = "VA", 
+                        year = 2018, 
+                        survey = "acs1",
+                        recode = TRUE) %>%
+  filter(JWMNP > 0) %>%
+  select(MIL_label, JWTR_label, PINCP, AGEP, JWMNP)
+```
+
+``` {r load person-level data, message=FALSE, results=FALSE, echo=FALSE}
+military_data <- get_pums(variables = c("MIL",
+                                      "JWTR",
+                                      "PINCP",
+                                      "AGEP",
+                                      "JWMNP"),
+                        state = "VA", 
+                        year = 2018, 
+                        survey = "acs1",
+                        recode = TRUE) %>%
+  filter(JWMNP > 0) %>%
+  filter(MIL_label == "Now on active duty") %>%
+  select(MIL_label, JWTR_label, PINCP, AGEP, JWMNP)
+```
+# Overview
+
+For this assignment, I had an enjoyable time charting out different visualizations of the variables that I pulled for Assignment 1. As a reminder, these are the five variables that I pulled from the 2018 ACS for my home state of Virginia:
+
+1. Military Service - MIL (categorical)
+2. Means of Transportation to Work - JWTR (categorical)
+3. Income - PINCP (continuous)
+4. Age - AGEP (continuous)
+5. Travel time to work - JWMNP (continuous)
+
+
+The above dataset contains 38,815 observations. For some of the visualizations in this submission, I pulled from a subset of the above dataset that filtered the "MIL_label" down to just "On Active Duty." This subset only contains 1073 observations.
+
+# Charts 1-3: Age/Income Scatter Plots
+
+In order to test out my newfound ability to create charts with ggplot, I first mapped out the intersection between age and income for the entire population of ACS respondents in Virginia. These charts are pretty busy and don't show very much, especially since they contain so many datapoints for people who have never served in the military. For Chart #3 (the black and white scatter plot), I only mapped these two variables for active duty military members in order to approximate rank. The trendline unsurprisingly shows that income tends to increase with age.
+
+``` {r}
+ggplot(person_data, 
+       aes(x = PINCP,
+           y = AGEP,
+           color = MIL_label)) +
+  geom_point() +
+  scale_x_continuous(name = "Income",
+                     breaks = seq(0, 1200000, by = 100000),
+                     labels = scales::dollar_format()) +
+  scale_y_continuous(name = "Age",
+                     breaks = seq(0, 100, by = 5),
+                     labels = paste(seq(0, 100, by = 5))) +
+   scale_color_discrete(name = "Military Service Status",
+                       labels = c("N/A (<17 years)",
+                                "Never Served",
+                                "On Active Duty",
+                                "Retired",
+                                "In Reserves")) +
+  
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+``` {r}
+ggplot(person_data, 
+       aes(x = AGEP,
+           y = PINCP,
+           color = MIL_label)) +
+  geom_point() +
+  scale_x_continuous(name = "Age",
+                     breaks = seq(0, 100, by = 5),
+                     labels = paste(seq(0, 100, by = 5))) +
+  scale_y_continuous(name = "Income",
+                     breaks = seq(0, 1200000, by = 100000),
+                     labels = scales::dollar_format()) +
+   scale_color_discrete(name = "Military Service Status",
+                       labels = c("N/A (<17 years)",
+                                "Never Served",
+                                "On Active Duty",
+                                "Retired",
+                                "In Reserves")) +
+
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+``` {r}
+ggplot(military_data, 
+       aes(x = AGEP,
+           y = PINCP)) +
+  geom_point() +
+  stat_smooth(color = "black", linetype = 2, size = 0.5) +
+  scale_x_continuous(name = "Age",
+                     breaks = seq(0, 100, by = 5),
+                     labels = paste(seq(0, 100, by = 5))) +
+  scale_y_continuous(name = "Income",
+                     breaks = seq(0, 1200000, by = 10000),
+                     labels = scales::dollar_format()) +
+
+  theme_bw()
+```
+
+
+# Charts 4-7: Travel Time to Work, by Military Service Status
+
+Getting into travel time to work, I basically followed the tutorials to demonstrate this variable in several different ways. I think the violin plot is much more aesthetic than the scatter plots. It showed me that car commuters seem to have the widest variation in self-reported commute times.
+
+``` {r}
+ggplot(person_data, 
+       aes(x = MIL_label,
+           y = JWMNP,
+           color = MIL_label)) +
+  geom_point() +
+  scale_x_discrete(name = "Miltary Service Status",
+                     labels = c("N/A (<17 years)",
+                                "Never Served",
+                                "On Active Duty",
+                                "Retired",
+                                "In Reserves")) +
+  scale_y_continuous(name = "Travel Time to Work",
+                     breaks = seq(0, 180, by = 10),
+                     labels = paste(seq(0, 180, by = 10))) +
+  scale_color_discrete(name = "Miltary Service",
+                     labels = c("N/A (less than 17 years old)",
+                                "Never served in the military",
+                                "Now on active duty",
+                                "On active duty in the past, but not now",
+                                "Only on active duty for training in Reserves/National Guard")) +
+
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+
+
+``` {r}
+ggplot(person_data, 
+       aes(x = MIL_label,
+           y = JWMNP,
+           color = MIL_label)) +
+  geom_point(position = "jitter",
+             size = 0.5,
+             alpha= 0.5) +
+  scale_x_discrete(name = "Miltary Service Status",
+                     labels = c("N/A (<17 years)",
+                                "Never Served",
+                                "On Active Duty",
+                                "Retired",
+                                "In Reserves")) +
+  scale_y_continuous(name = "Travel Time to Work",
+                     breaks = seq(0, 180, by = 10),
+                     labels = paste(seq(0, 180, by = 10))) +
+  scale_color_discrete(name = "Miltary Service",
+                     labels = c("N/A (less than 17 years old)",
+                                "Never served in the military",
+                                "Now on active duty",
+                                "On active duty in the past, but not now",
+                                "Only on active duty for training in Reserves/National Guard")) +
+
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+
+
+``` {r}
+ggplot(person_data, 
+       aes(x = MIL_label,
+           y = JWMNP,
+           color = MIL_label)) +
+  geom_boxplot() +
+  scale_x_discrete(name = "Miltary Service Status",
+                     labels = c("N/A (<17 years)",
+                                "Never Served",
+                                "On Active Duty",
+                                "Retired",
+                                "In Reserves")) +
+  scale_y_continuous(name = "Travel Time to Work",
+                     breaks = seq(0, 180, by = 10),
+                     labels = paste(seq(0, 180, by = 10))) +
+  scale_color_discrete(name = "Miltary Service",
+                     labels = c("N/A (less than 17 years old)",
+                                "Never served in the military",
+                                "Now on active duty",
+                                "On active duty in the past, but not now",
+                                "Only on active duty for training in Reserves/National Guard")) +
+
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+
+
+``` {r}
+ggplot(person_data, 
+       aes(x = MIL_label,
+           y = JWMNP,
+           color = MIL_label)) +
+  geom_violin() +
+  scale_x_discrete(name = "Miltary Service Status",
+                     labels = c("N/A (<17 years)",
+                                "Never Served",
+                                "On Active Duty",
+                                "Retired",
+                                "In Reserves")) +
+  scale_y_continuous(name = "Travel Time to Work",
+                     breaks = seq(0, 180, by = 10),
+                     labels = paste(seq(0, 180, by = 10))) +
+  scale_color_discrete(name = "Miltary Service",
+                     labels = c("N/A (less than 17 years old)",
+                                "Never served in the military",
+                                "Now on active duty",
+                                "On active duty in the past, but not now",
+                                "Only on active duty for training in Reserves/National Guard")) +
+
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+
+# Charts 8-9: Commuting Modes for Active Duty Military
+
+In order to take a look at commute modeshare, I first filtered my dataset down to "On active duty" military members only, and then created a boxplot and violin plot to analyze how their methods of commuting affected their travel time to work. 
+
+``` {r}
+ggplot(military_data, 
+       aes(x = JWTR_label,
+           y = JWMNP,
+           color = JWTR_label)) +
+  geom_boxplot() +
+  scale_x_discrete(name = "Travel Mode to Work",
+                     labels = c("Bicycle",
+                                "Bus/Trolley Bus",
+                                "Car, Truck, or Van",
+                                "Ferryboat",
+                                "Motorcycle",
+                                "Other Method",
+                                "Railroad",
+                                "Streetcar/Trolley",
+                                "Subway/Elevated",
+                                "Taxicab",
+                                "Walked")) +
+  scale_y_continuous(name = "Travel Time to Work",
+                     breaks = seq(0, 180, by = 10),
+                     labels = paste(seq(0, 180, by = 10))) +
+  scale_color_discrete(name = "Travel Mode to Work",
+                     labels = c("Bicycle",
+                                "Bus/Trolley bus",
+                                "Car, truck, or van",
+                                "Ferryboat",
+                                "Motorcycle",
+                                "Other method",
+                                "Railroad",
+                                "Streetcar/Trolley",
+                                "Subway/Elevated",
+                                "Taxicab",
+                                "Walked")) +
+
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+``` {r}
+ggplot(military_data, 
+       aes(x = JWTR_label,
+           y = JWMNP,
+           color = JWTR_label)) +
+  geom_violin() +
+  scale_x_discrete(name = "Travel Mode to Work",
+                     labels = c("Bicycle",
+                                "Bus or trolley bus",
+                                "Car, truck, or van",
+                                "Ferryboat",
+                                "Motorcycle",
+                                "Other method",
+                                "Railroad",
+                                "Streetcar or trolley car",
+                                "Subway or elevated",
+                                "Taxicab",
+                                "Walked")) +
+  scale_y_continuous(name = "Travel Time to Work",
+                     breaks = seq(0, 180, by = 10),
+                     labels = paste(seq(0, 180, by = 10))) +
+  scale_color_discrete(name = "Travel Mode to Work",
+                     labels = c("Bicycle",
+                                "Bus or trolley bus",
+                                "Car, truck, or van",
+                                "Ferryboat",
+                                "Motorcycle",
+                                "Other method",
+                                "Railroad",
+                                "Streetcar or trolley car",
+                                "Subway or elevated",
+                                "Taxicab",
+                                "Walked")) +
+
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+# Charts 10-11: Commute Modeshare Bar Graphs
+
+Lastly, I played around with creating bar graphs that showed the outsize amount of car commuters in Virginia. The fill chart shows the percentage breakdown of each mode by status of military service, which I thought was interesting because it shows the relative diversity in commuting methods for those on active duty. However, as the last chart shows, the vast majority of active duty military members still commute by car.
+
+``` {r}
+ggplot(person_data, aes(x = MIL_label, fill = JWTR_label)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(name = "Commute Mode",
+                     breaks = seq(0, 1, by = 0.1),
+                     labels = paste(seq(0,100, by = 10), "%", sep ="")) +
+  scale_x_discrete(name = "Military Service Status",
+                       labels = c("N/A (<17 years)",
+                                "Never Served",
+                                "On Active Duty",
+                                "Retired",
+                                "In Reserves")) +
+  scale_fill_discrete(name = element_blank(),
+                        labels = c("Bicycle",
+                                "Bus or trolley bus",
+                                "Car, truck, or van",
+                                "Ferryboat",
+                                "Motorcycle",
+                                "Other method",
+                                "Railroad",
+                                "Streetcar or trolley car",
+                                "Subway or elevated",
+                                "Taxicab",
+                                "Walked")) +
+  theme_bw()
+```
+
+
+``` {r}
+ggplot(military_data, aes(x = JWTR_label, fill = JWMNP)) +
+  geom_bar() +
+  scale_y_continuous(name = "Military Commuters By Mode") +
+  scale_x_discrete(name = "Travel Mode to Work",
+                       labels = c("Bicycle",
+                                "Bus or trolley bus",
+                                "Car, truck, or van",
+                                "Ferryboat",
+                                "Motorcycle",
+                                "Other method",
+                                "Railroad",
+                                "Streetcar or trolley car",
+                                "Subway or elevated",
+                                "Taxicab",
+                                "Walked")) +
+  scale_fill_continuous(name = "Military Commuters By Mode") +
+  
+  theme_bw() +
+  theme(legend.position = "none") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```

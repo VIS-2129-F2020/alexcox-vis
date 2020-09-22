@@ -1,0 +1,188 @@
+---
+title: "Vis Creative Assignment 2"
+author: "Alex Cox"
+date: "9/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Vis Creative Assignment 2 Overview
+
+For this assignment, I took a look at
+
+```{r loading, message=FALSE}
+
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+#library(rgeos)
+library(ggspatial)
+library(cartogram)
+library(ggthemes)
+library(ggplot2)
+library(tidyverse)
+#library(raster)
+#library(readr)
+```
+
+## World Map Test
+
+```{r worldmap}
+ggplot(data = world) + 
+    geom_sf(color = "black", fill = "lightblue")
+```
+
+## Maps of Africa
+
+I chose to do an analysis of African countries for this exercise, as it's not a continent that I have much experience in. First, I mapped Africa on an equirectangular plot. Then, I had fun mapping Africa in different projections from SpatialReference.org. I think my favorite is the North Pole projection.
+
+```{r africamap}
+#af_countries <- world %>%
+  #filter(continent == "Africa")
+
+af_map <- ggplot(Africa) +
+  geom_sf() + 
+  theme_dark()
+
+af_map +
+  annotation_scale()
+## Scale on map varies by more than 10%, scale bar may be inaccurate
+```
+
+
+## Africa Map (Projection 1 - Mercator)
+
+```{r projections}
+#Africa
+MERC <- "+proj=tmerc +lat_0=0 +lon_0=31 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+SA <- "+proj=aea +lat_1=-2 +lat_2=-22 +lat_0=-12 +lon_0=-54 +x_0=0 +y_0=0 +ellps=aust_SA +units=m +no_defs "
+POLE <- "+proj=laea +lat_0=90 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+
+```
+
+```{r africamap1}
+
+#Africa <- world %>%
+  #filter(continent == "Africa")
+
+ggplot(Africa) +
+  geom_sf() +
+  coord_sf(crs = MERC) +
+  theme_bw()
+
+```
+
+
+## Africa Map (Projection 2 - Albers Conical Equal Area, South America)
+
+```{r africamap2}
+
+#Africa <- world %>%
+  #filter(continent == "Africa")
+
+ggplot(Africa) +
+  geom_sf() +
+  coord_sf(crs = SA) +
+  theme_bw()
+
+```
+
+## Africa Map (Projection 3 - WGS 84 / North Pole LAEA Atlantic)
+
+```{r africamap3}
+
+#Africa <- world %>%
+  #filter(continent == "Africa")
+
+ggplot(Africa) +
+  geom_sf() +
+  coord_sf(crs = POLE) +
+  theme_bw()
+
+```
+
+## Mapping COVID Cases in Africa by Country
+
+I will now map the number of COVID cases in Africa by country as of September 20th, using data I obtained from the website Trading Economics. I have saved the data as a CSV file and will attempt to map confirmed COVID cases by country.
+
+```{r transform}
+africa_transformed <- Africa %>%
+  st_transform(crs = MERC)
+
+ggplot(africa_transformed) +
+  geom_sf() +
+  theme_bw()
+```
+
+
+```{r covid data, message=FALSE}
+covid_africa <- read_csv("africa_covid_cases_sep20.csv")
+
+covid_africa_countries <-africa_transformed %>%
+  left_join(covid_africa, by = c("name" = "Country")) %>%
+  select(name, "Last", "Previous",	"Reference",	"Unit")
+```
+
+Below I have mapped the confirmed COVID cases in Africa by country, as well as in continuous cartogram, non-continuous cartogram, and proportional symbol map form. These cartograms really demonstrate the severity of the pandemic in South Africa compared to the rest of the continent. Please note, however, that this dataset does not include data for some countries whose case reporting may have been considered to be unreliable.
+
+```{r covid map}
+ggplot(covid_africa_countries, aes(fill = Last)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(
+    name = "Number of\nconfirmed\nCOVID-19\ncases as of\nSeptember 20, 2020",
+    breaks = seq(0, 670000, by = 100000),
+    labels = formatC(seq(0, 670000, by = 100000), 
+                     big.mark = ",", format = "f", digits = 0)) +
+  theme_map() +
+  theme(legend.background = element_blank())
+```
+```{r covid catrogram 1}
+covid_cartogram_cont <- covid_africa_countries %>%
+  cartogram_cont("Last")
+
+ggplot(covid_cartogram_cont, aes(fill = Last)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(
+    name = "Number of confirmed\nCOVID-19 cases\nas of September 20, 2020",
+    breaks = seq(0, 670000, by = 100000),
+    labels = formatC(seq(0, 670000, by = 100000), 
+                     big.mark = ",", format = "f", digits = 0)) +
+  theme_map() +
+  theme(legend.background = element_blank())
+```
+```{r covid catrogram2}
+covid_cartogram_ncont <- covid_africa_countries %>%
+  cartogram_ncont("Last")
+
+ggplot(covid_cartogram_ncont, aes(fill = Last)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(
+    name = "Number of confirmed\nCOVID-19 cases\nas of September 20, 2020",
+    breaks = seq(0, 670000, by = 100000),
+    labels = formatC(seq(0, 670000, by = 100000), 
+                     big.mark = ",", format = "f", digits = 0)) +
+  theme_map() +
+  theme(legend.background = element_blank())
+```
+
+
+
+```{r covid centeroid}
+covid_centeroids <- covid_africa_countries %>%
+  st_centroid()
+
+ggplot(africa_transformed) +
+  geom_sf(fill = NA, color = "gray") +
+  geom_sf(data = covid_centeroids, 
+          aes(size = Last),
+          alpha = 0.5, color = "red") +
+  scale_size_continuous(name = "Number of confirmed\nCOVID-19 cases as of\nSeptember 20, 2020",
+    breaks = seq(100000, 500000, by = 100000),
+    labels = formatC(seq(100000, 500000, by = 100000), 
+                     big.mark = ",", format = "f", digits = 0),
+    range = c(0, 20)) +
+  theme_void()
+```

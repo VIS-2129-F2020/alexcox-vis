@@ -9,39 +9,39 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Vis Creative Assignment 2 Overview
+## Overview
 
-For this assignment, I took a look at
+For this assignment, I took a look at COVID case numbers in African countries. But first, I tested out different map projections. Here is a simple world map.
 
-```{r loading, message=FALSE}
-
+```{r loading, echo=FALSE, message=FALSE}
+library(ggplot2)
 library(sf)
 library(rnaturalearth)
-library(rnaturalearthdata)
-#library(rgeos)
+library(tidyverse)
 library(ggspatial)
 library(cartogram)
 library(ggthemes)
-library(ggplot2)
-library(tidyverse)
-#library(raster)
-#library(readr)
+
 ```
 
-## World Map Test
-
 ```{r worldmap}
-ggplot(data = world) + 
-    geom_sf(color = "black", fill = "lightblue")
+world <- ne_countries(scale = 50, returnclass = "sf") 
+
+world_map <- ggplot(world) +
+  geom_sf() +
+  theme_bw()
+
+world_map
 ```
 
 ## Maps of Africa
 
-I chose to do an analysis of African countries for this exercise, as it's not a continent that I have much experience in. First, I mapped Africa on an equirectangular plot. Then, I had fun mapping Africa in different projections from SpatialReference.org. I think my favorite is the North Pole projection.
+I chose to do an analysis of African countries for this exercise because it's not a continent that I have much experience in. First, I mapped Africa on an equirectangular plot. Then, I had fun mapping Africa in different projections from SpatialReference.org.
 
 ```{r africamap}
-#af_countries <- world %>%
-  #filter(continent == "Africa")
+Africa <- world %>% 
+  filter(continent == "Africa")
+
 
 af_map <- ggplot(Africa) +
   geom_sf() + 
@@ -54,6 +54,8 @@ af_map +
 
 
 ## Africa Map (Projection 1 - Mercator)
+
+Here's Africa mapped on a mercator projection.
 
 ```{r projections}
 #Africa
@@ -78,6 +80,8 @@ ggplot(Africa) +
 
 ## Africa Map (Projection 2 - Albers Conical Equal Area, South America)
 
+Here is Africa mapped on a projection that it usually used for South America.
+
 ```{r africamap2}
 
 #Africa <- world %>%
@@ -91,6 +95,8 @@ ggplot(Africa) +
 ```
 
 ## Africa Map (Projection 3 - WGS 84 / North Pole LAEA Atlantic)
+
+I think my favorite is the North Pole projection. It's a much different perspective than I'm used to seeing.
 
 ```{r africamap3}
 
@@ -107,6 +113,9 @@ ggplot(Africa) +
 ## Mapping COVID Cases in Africa by Country
 
 I will now map the number of COVID cases in Africa by country as of September 20th, using data I obtained from the website Trading Economics. I have saved the data as a CSV file and will attempt to map confirmed COVID cases by country.
+
+Below, I have mapped the confirmed COVID cases in Africa by country, as well as in continuous cartogram, non-continuous cartogram, and proportional symbol map form. These cartograms really demonstrate the severity of the pandemic in South Africa compared to the rest of the continent. Please note, however, that this dataset does not include data for some countries whose case reporting may have been considered to be unreliable.
+
 
 ```{r transform}
 africa_transformed <- Africa %>%
@@ -126,9 +135,7 @@ covid_africa_countries <-africa_transformed %>%
   select(name, "Last", "Previous",	"Reference",	"Unit")
 ```
 
-Below I have mapped the confirmed COVID cases in Africa by country, as well as in continuous cartogram, non-continuous cartogram, and proportional symbol map form. These cartograms really demonstrate the severity of the pandemic in South Africa compared to the rest of the continent. Please note, however, that this dataset does not include data for some countries whose case reporting may have been considered to be unreliable.
-
-```{r covid map}
+```{r covid map, message=FALSE}
 ggplot(covid_africa_countries, aes(fill = Last)) +
   geom_sf(color = NA) +
   scale_fill_viridis_c(
@@ -139,7 +146,8 @@ ggplot(covid_africa_countries, aes(fill = Last)) +
   theme_map() +
   theme(legend.background = element_blank())
 ```
-```{r covid catrogram 1}
+
+```{r covid catrogram 1, results = 'hide', message=FALSE}
 covid_cartogram_cont <- covid_africa_countries %>%
   cartogram_cont("Last")
 
@@ -153,7 +161,7 @@ ggplot(covid_cartogram_cont, aes(fill = Last)) +
   theme_map() +
   theme(legend.background = element_blank())
 ```
-```{r covid catrogram2}
+```{r covid catrogram2, results = 'hide', message=FALSE}
 covid_cartogram_ncont <- covid_africa_countries %>%
   cartogram_ncont("Last")
 
@@ -170,7 +178,7 @@ ggplot(covid_cartogram_ncont, aes(fill = Last)) +
 
 
 
-```{r covid centeroid}
+```{r covid centeroid, results = 'hide', message=FALSE}
 covid_centeroids <- covid_africa_countries %>%
   st_centroid()
 

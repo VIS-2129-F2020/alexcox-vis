@@ -1,0 +1,337 @@
+---
+title: "Vis Creative Assignment 3"
+author: "Alex Cox"
+date: "9/27/2020"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    highlight: tango
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries, results='hide', message=FALSE}
+library(sf)
+library(tidyverse)
+library(ggthemes)
+library(ggspatial)
+library(units)
+library(nngeo)
+```
+
+## Overview
+
+For this exercise, I decided to examine the proximity of Bluebike (formerly Hubway) bikeshare stations to polling places in the City of Boston. The Bluebikes system has seen a massive increase in ridership during the COVID-19 pandemic due to its status as an affordable, sustainable, and socially-distanced form of transportation, so I anticipate that it will play an important role in transporting voters to the polls this election season.
+
+First, I loaded the KML files that I pulled from the Analyze Boston open data website. I used the same neighborhood and hydrography layers that Carole used in her tutorial, in addition to the polling locations and bikeshare dock locations. Here is how I will define my data points/polygons as delieated in the syllabus:
+
+Layer A: Hubway/Bluebikes Stations (Points)
+Layer B: Polling Locations (Points)
+Layer C: Boston Neighborhoods (Polygon)
+Layer D: Boston Hydrography (Polygon)
+
+```{r load data, results='hide', message=FALSE}
+
+nhoods <- st_read("http://bostonopendata-boston.opendata.arcgis.com/datasets/3525b0ee6e6b427f9aab5d0a1d0a1a28_0.kml?outSR=%7B%22latestWkid%22%3A2249%2C%22wkid%22%3A102686%7D", 
+                  quiet = TRUE) 
+
+water <- st_read("http://bostonopendata-boston.opendata.arcgis.com/datasets/2b3c0fa13b1c468eb702a3645fcc6bcb_5.kml", 
+                  quiet = TRUE) 
+
+polls <- st_read("http://bostonopendata-boston.opendata.arcgis.com/datasets/f7c6dc9eb6b14463a3dd87451beba13f_5.kml?outSR=%7B%22latestWkid%22%3A2249%2C%22wkid%22%3A102686%7D", 
+                  quiet = TRUE) 
+
+hubway <- st_read("http://bostonopendata-boston.opendata.arcgis.com/datasets/ee7474e2a0aa45cbbdfe0b747a5eb032_0.kml?outSR=%7B%22latestWkid%22%3A3857%2C%22wkid%22%3A102100%7D", 
+                  quiet = TRUE) 
+
+
+```
+
+Then, I transformed my data to the Massachusetts State Plane system:
+
+```{r transform data}
+MA_state_plane <- "+proj=lcc +lat_1=41.71666666666667 +lat_2=42.68333333333333 +lat_0=41 +lon_0=-71.5 +x_0=200000 +y_0=750000 +ellps=GRS80 +units=m +no_defs"
+
+nhoods <- nhoods %>%
+  st_transform(MA_state_plane)
+
+water <- water %>%
+  st_transform(MA_state_plane)
+
+polls <- polls %>%
+  st_transform(MA_state_plane)
+
+hubway <- hubway %>%
+  st_transform(MA_state_plane)
+
+```
+
+## Fixing the Out-of-Date Bikeshare Location Data
+
+As I started this assignment, the first thing I did was draw a quick map to visualize the polling and bikeshare dock location data. However, I immediately noticed that something was wrong with this data. Bluebike docks appeared completely absent in outlying neighborhoods of Boston such as West Roxbury, Hyde Park, and Mattapan, even though I knew that there must be docks there because I had used them before.
+
+```{r overview map}
+ggplot(water) +
+  geom_sf(fill = "lightblue", color = NA) +
+  geom_sf(data = hubway, color = "darkgreen", size = 1) +
+  geom_sf(data = polls, color = "red", size = 1) +
+  geom_sf(data= nhoods, fill = NA, color = "darkgrey") +
+  theme_map() +
+  annotation_scale()
+```
+
+This led me to discover that the reason the City of Boston's public bikeshare dock location data still referred to the bikeshare system as "Hubway" and not "Bluebikes" was because it was still pulling data from a defunct Hubway website that had not been updated since at least 2018, before the system name was changed to Bluebikes. Therefore, these bikeshare dock locations were horribly out of date.
+
+Because I wanted to continue with the analysis that I set out to do, I pulled an up-to-date CSV file of Bluebike location coordinates from https://www.bluebikes.com/system-data. I then converted the latitude/longitude coordinate data contained in this CSV file into a KML file of geographic data points. After reading this KML file in R and transforming it to the Massachusetts State Plane system, I finally mapped it onto the Boston neighborhood outlines/hydrography map along with polling locations. Finally, I had an up-to-date map of Bluebike docks to work with!
+
+```{r up to date bluebike data, message=FALSE}
+
+bluebikes <- st_read("C:/Users/alexa/OneDrive/Documents/Github/alexcox-vis/current_bluebikes_stations.kml",
+                     quiet = TRUE)
+
+bluebikes_transformed <- bluebikes %>%
+  st_transform(MA_state_plane)
+
+ggplot(water) +
+  geom_sf(fill = "lightblue", color = NA) +
+  geom_sf(data = bluebikes_transformed, color = "blue", size = 1) +
+  geom_sf(data = polls, color = "red", size = 1) +
+  geom_sf(data= nhoods, fill = NA, color = "darkgrey") +
+  theme_map() +
+  annotation_scale()
+```
+
+## Creating a Buffer
+
+For this analysis, I will create a buffer of 400 meters (~1320 feet or 0.25 miles) around each polling place and then see how that compares to the Bluebike dock location data.
+
+```{r polling location buffer}
+polls_buffer <- st_buffer(polls, dist = 400) %>%
+  st_union()
+
+ggplot(polls_buffer) +
+  geom_sf() +
+  theme_map()
+```
+
+Here are the Bluebike docks located within these buffer zones:
+
+```{r polling and bikeshare buffer}
+bluebikes_polls <- bluebikes_transformed[polls_buffer,]
+  
+ggplot(polls_buffer) +
+  geom_sf() +
+  geom_sf(data = bluebikes_polls, 
+          color = "darkblue", 
+          size = 1) +
+  theme_map()
+```
+
+After joining my two datasets...
+
+```{r join datasets}
+
+bluebikes <- bluebikes_transformed %>%
+  st_join(bluebikes_polls) %>%
+  mutate(by_polls = !is.na(Name.y))
+```
+
+...I calculated that there are 148 Bluebikes stations located within 400 meters of a polling location...
+
+```{r number}
+n_polls_bluebikes <- sum(bluebikes$by_polls)
+
+n_polls_bluebikes
+
+```
+
+... representing approximately 43.40% of all Bluebikes stations in Boston (148 stations out of 341 total).
+
+```{r percentage}
+n_bluebikes <- length(bluebikes$by_polls)
+
+pct_polls_bluebikes <- n_polls_bluebikes / n_bluebikes
+
+pct_polls_bluebikes
+```
+## Map 1 (Syllabus Metric #1)
+
+
+This map demonstrates which Bluebikes stations are located within 400 meters of a polling location.
+
+```{r bluebike polls map}
+left_side  <- st_bbox(bluebikes)$xmax
+top_side <- st_bbox(bluebikes)$ymax
+
+ggplot(water) +
+  geom_sf(fill = "lightblue", color = NA) +
+  geom_sf(data = bluebikes, size = 1,
+          aes(color = by_polls)) +
+  scale_color_manual(values = c("green", "darkblue"),
+          name = "Bluebike Statons\nby distance to a polling place", 
+          labels = c("No polling station within 400 m",
+                     "Polling station within 400 m")) +
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+  annotate(geom = "text", x = left_side, 
+           y = top_side, 
+           label = paste("Of the ", 
+                         prettyNum(n_bluebikes, big.mark = ","),
+                         " Bluebike docks in Boston\n", 
+                         prettyNum(n_polls_bluebikes, big.mark = ","),
+                         " (", 
+                         prettyNum(100*pct_polls_bluebikes, digits = 0),
+                         "%) are within 400\nmeters of a polling place.",
+                         sep = ""),
+           hjust = 0, vjust = 0, size = 2) +
+  theme_map() +
+  theme(panel.background = element_rect(fill = "cornsilk1"),
+        legend.background = element_rect(fill = alpha("white", 0.5), 
+                                         color = "gray"))
+```
+
+## Map 2 (Syllabus Metric #13)
+
+Just to test it out for myself, I coded the overlap between the hydrography and neighborhood polygons.
+
+```{r nhoods water}
+
+nhoods <- nhoods %>%
+  mutate(num_water = lengths(st_overlaps(nhoods, water))) %>%
+  mutate(has_water = num_water > 0)
+
+n_water_nhoods <- sum(nhoods$has_water)
+
+left_side  <- st_bbox(water)$xmin
+top_side <- st_bbox(water)$ymax
+
+ggplot(water) +
+  geom_sf(fill = "lightblue", color = NA) +
+  geom_sf(data = nhoods,
+          aes(fill = has_water)) +
+  scale_fill_manual(values = c("cornsilk1", "darkseagreen1"),
+          name = "Boston Neighborhoods\nby presence of a body of water", 
+          labels = c("Neighborhood without\nan overlapping body of water",
+                     "Neighborhood with an\noverlapping body of water")) +
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+  annotate(geom = "text", x = left_side, 
+           y = top_side - 1000, 
+           label = paste(n_water_nhoods ,
+                         "of Boston's", 
+                         length(nhoods$Name),
+                         "neighborhoods contain\nor overlap with", 
+                         "a body of water."),
+           hjust = 0, vjust = 0, size = 3) +
+  theme_map() +
+  theme(panel.background = element_rect(fill = "gray"),
+        legend.background = element_rect(fill = alpha("white", 0.5), 
+                                         color = "gray"))
+
+```
+
+## Map 3 (Syllabus Metric #5)
+
+This map shows the number of Bluebikes stations within each neighborhood of Boston.
+
+```{r bluebikes by neighborhood}
+nhoods <- nhoods %>%
+  mutate(num_bluebikes = lengths(st_covers(nhoods, bluebikes)))
+
+ggplot(nhoods) +
+  geom_sf(color = NA, 
+          aes(fill = num_bluebikes)) +
+  scale_fill_viridis_c(name = "Boston neighborhoods\nby number of Bluebike stations",
+                       breaks = breaks <- seq(0, 26, by =4),
+                       labels = paste(prettyNum(breaks, big.mark = ","),
+                                      "Bluebike Stations")) +
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+theme_map() +
+  theme(legend.background = element_rect(fill = alpha("white", 0.5), 
+                                         color = "gray"))
+```
+
+## Map 4 (Syllabus Metric #7)
+
+This map shows the number of polling locations within each neighborhood of Boston. I'm beginning to see why Boston's largest neighborhood by geography and population, Dorchester, is often split into 2 sections for the purposes of statistical analysis.
+
+```{r polling stations by neighborhood}
+nhoods <- nhoods %>%
+  mutate(num_polls = lengths(st_covers(nhoods, polls)))
+
+ggplot(nhoods) +
+  geom_sf(color = NA, 
+          aes(fill = num_polls)) +
+  scale_fill_viridis_c(name = "Boston neighborhoods\nby number of polling locations",
+                       breaks = breaks <- seq(0, 60, by =10),
+                       labels = paste(prettyNum(breaks, big.mark = ","),
+                                      "Polling Locations")) +
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+theme_map() +
+  theme(legend.background = element_rect(fill = alpha("white", 0.5), 
+                                         color = "gray"))
+```
+
+## Map 5 (Syllabus Metric #19)
+
+This map shows the average density of Bluebike stations within each neighborhood of Boston.
+
+```{r bluebike station density}
+nhoods <- nhoods %>%
+  mutate(area = set_units(st_area(nhoods), km^2)) %>%
+  mutate(bluebikes_dens = as.numeric(num_bluebikes / area))
+
+ggplot(nhoods) +
+  geom_sf(color = NA, 
+          aes(fill = bluebikes_dens)) +
+    scale_fill_viridis_c(name = 
+                           "Boston neighborhoods\nby Bluebike station density",
+                       breaks = breaks <- seq(0, 12, by = 1),
+                       labels = paste(prettyNum(breaks, big.mark = ","),
+                                      "Bluebike stations per square km")) +
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+theme_map() +
+  theme(legend.position = "right",
+    legend.background = element_rect(fill = alpha("white", 0.5), 
+                                         color = "gray"))
+```
+
+## Map 6 (Syllabus Metric #21)
+
+This map shows the average density of polling places within each neighborhood of Boston.
+
+```{r polling station density}
+nhoods <- nhoods %>%
+  mutate(area = set_units(st_area(nhoods), km^2)) %>%
+  mutate(polls_dens = as.numeric(num_polls / area))
+
+ggplot(nhoods) +
+  geom_sf(color = NA, 
+          aes(fill = polls_dens)) +
+    scale_fill_viridis_c(name = 
+                           "Boston neighborhoods\nby polling place density",
+                       breaks = breaks <- seq(0, 8, by = 1),
+                       labels = paste(prettyNum(breaks, big.mark = ","),
+                                      "polling places per square km")) +
+  annotation_scale(location = "br") +
+  annotation_north_arrow(location = "tr",
+                         style = north_arrow_minimal()) +
+theme_map() +
+  theme(legend.position = "right",
+    legend.background = element_rect(fill = alpha("white", 0.5), 
+                                         color = "gray"))
+```
+
+
